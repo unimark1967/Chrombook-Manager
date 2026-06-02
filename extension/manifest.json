@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "Chromebook Manager",
+  "version": "1.0.0",
+  "description": "Управление на Chromebook устройства в класната стая",
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-scripts/chat-overlay.js"],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ],
+
+  "permissions": [
+    "tabs",
+    "tabCapture",
+    "activeTab",
+    "storage",
+    "notifications",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "scripting",
+    "windows",
+    "alarms",
+    "offscreen",
+    "identity",
+    "management"
+  ],
+
+  "host_permissions": ["<all_urls>"],
+
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_static",
+        "enabled": true,
+        "path": "rules/static_rules.json"
+      }
+    ]
+  },
+
+  "action": {
+    "default_popup": "pages/popup.html",
+    "default_title": "Chromebook Manager"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["pages/lock.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
