@@ -1,0 +1,12 @@
+{
+  "name": "chromebook-manager",
+  "private": true,
+  "workspaces": ["web", "api", "extension"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=web\" \"npm run dev --workspace=api\"",
+    "build": "npm run build --workspace=web && npm run build --workspace=api"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

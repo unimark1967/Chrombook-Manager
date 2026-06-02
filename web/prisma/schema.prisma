@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  teacher
+  student
+  school_admin
+  super_admin
+}
+
+enum RuleType {
+  url_block
+  url_allow
+  tab_limit
+  lock
+}
+
+enum EventType {
+  lock
+  unlock
+  scene_change
+  override
+  tab_open
+  tab_close
+  chat
+}
+
+enum MessageType {
+  announcement
+  private
+  reaction
+}
+
+model Organization {
+  id               String    @id @default(cuid())
+  name             String
+  domain           String    @unique
+  googleCustomerId String?
+  createdAt        DateTime  @default(now())
+
+  users      User[]
+  devices    Device[]
+  classrooms Classroom[]
+  scenes     Scene[]
+  groups     Group[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  role          Role      @default(student)
+  orgId         String?
+  createdAt     DateTime  @default(now())
+
+  org               Organization?      @relation(fields: [orgId], references: [id])
+  accounts          Account[]
+  sessions          Session[]
+  classrooms        Classroom[]        @relation("TeacherClassrooms")
+  classroomSessions ClassroomSession[] @relation("TeacherSessions")
+  devices           Device[]           @relation("StudentDevices")
+  groupMembers      GroupMember[]      @relation("StudentGroupMembers")
+  scenesCreated     Scene[]
+  overridesGranted  TeacherOverride[]  @relation("GrantedOverrides")
+  sentMessages      ChatMessage[]      @relation("SentMessages")
+  receivedMessages  ChatMessage[]      @relation("ReceivedMessages")
+  sessionEvents     SessionEvent[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Device {
+  id             String    @id @default(cuid())
+  orgId          String
+  googleDeviceId String    @unique
+  serialNumber   String    @unique
+  studentId      String?
+  status         String    @default("active")
+  lastSeen       DateTime?
+
+  org          Organization  @relation(fields: [orgId], references: [id])
+  student      User?         @relation("StudentDevices", fields: [studentId], references: [id])
+  groupMembers GroupMember[]
+  history      BrowsingHistory[]
+
+  @@index([orgId])
+  @@index([studentId])
+}
+
+model Classroom {
+  id           String  @id @default(cuid())
+  name         String
+  orgId        String
+  teacherId    String
+  orgUnitPath  String?
+
+  org      Organization       @relation(fields: [orgId], references: [id])
+  teacher  User               @relation("TeacherClassrooms", fields: [teacherId], references: [id])
+  sessions ClassroomSession[]
+  groups   Group[]
+
+  @@index([orgId])
+  @@index([teacherId])
+}
+
+model ClassroomSession {
+  id            String    @id @default(cuid())
+  classroomId   String
+  teacherId     String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  activeSceneId String?
+
+  classroom  Classroom        @relation(fields: [classroomId], references: [id])
+  teacher    User             @relation("TeacherSessions", fields: [teacherId], references: [id])
+  activeScene Scene?          @relation(fields: [activeSceneId], references: [id])
+  events     SessionEvent[]
+  messages   ChatMessage[]
+  history    BrowsingHistory[]
+  overrides  TeacherOverride[]
+
+  @@index([classroomId])
+  @@index([teacherId])
+}
+
+model Scene {
+  id        String  @id @default(cuid())
+  name      String
+  orgId     String
+  createdBy String
+  isGlobal  Boolean @default(false)
+
+  org      Organization       @relation(fields: [orgId], references: [id])
+  creator  User               @relation(fields: [createdBy], references: [id])
+  rules    SceneRule[]
+  groups   Group[]
+  sessions ClassroomSession[]
+
+  @@index([orgId])
+}
+
+model SceneRule {
+  id       String   @id @default(cuid())
+  sceneId  String
+  ruleType RuleType
+  value    Json
+  priority Int      @default(0)
+
+  scene Scene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@index([sceneId])
+}
+
+model Group {
+  id          String  @id @default(cuid())
+  name        String
+  classroomId String
+  sceneId     String?
+  color       String  @default("#6366f1")
+  orgId       String
+
+  classroom Classroom     @relation(fields: [classroomId], references: [id])
+  scene     Scene?        @relation(fields: [sceneId], references: [id])
+  org       Organization  @relation(fields: [orgId], references: [id])
+  members   GroupMember[]
+
+  @@index([classroomId])
+}
+
+model GroupMember {
+  groupId   String
+  deviceId  String
+  studentId String?
+
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student User?  @relation("StudentGroupMembers", fields: [studentId], references: [id])
+
+  @@id([groupId, deviceId])
+}
+
+model BrowsingHistory {
+  id            String    @id @default(cuid())
+  sessionId     String
+  deviceId      String
+  studentId     String?
+  url           String
+  pageTitle     String?
+  visitedAt     DateTime  @default(now())
+  leftAt        DateTime?
+  screenshotUrl String?
+
+  session ClassroomSession @relation(fields: [sessionId], references: [id])
+  device  Device           @relation(fields: [deviceId], references: [id])
+
+  @@index([sessionId])
+  @@index([deviceId])
+}
+
+model SessionEvent {
+  id         String    @id @default(cuid())
+  sessionId  String
+  eventType  EventType
+  actorId    String?
+  targetId   String?
+  payload    Json?
+  occurredAt DateTime  @default(now())
+
+  session ClassroomSession @relation(fields: [sessionId], references: [id])
+  actor   User?            @relation(fields: [actorId], references: [id])
+
+  @@index([sessionId])
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  fromUser  String
+  toUser    String?
+  message   String
+  type      MessageType @default(announcement)
+  sentAt    DateTime    @default(now())
+  readAt    DateTime?
+
+  session  ClassroomSession @relation(fields: [sessionId], references: [id])
+  sender   User             @relation("SentMessages", fields: [fromUser], references: [id])
+  receiver User?            @relation("ReceivedMessages", fields: [toUser], references: [id])
+
+  @@index([sessionId])
+}
+
+model TeacherOverride {
+  id           String    @id @default(cuid())
+  sessionId    String
+  grantedBy    String
+  targetDevice String
+  urlPattern   String
+  grantedAt    DateTime  @default(now())
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+
+  session   ClassroomSession @relation(fields: [sessionId], references: [id])
+  teacher   User             @relation("GrantedOverrides", fields: [grantedBy], references: [id])
+
+  @@index([sessionId])
+  @@index([targetDevice])
+}
