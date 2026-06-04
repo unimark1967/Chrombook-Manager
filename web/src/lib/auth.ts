@@ -22,26 +22,12 @@ declare module 'next-auth' {
 }
 
 function detectRoleFromEmail(email: string, hd?: string): Role {
-  // Google Workspace hosted domain present → could be teacher or student.
-  // Convention: accounts ending in .teacher@domain or teacher. prefix are teachers.
-  // Fallback: all workspace accounts default to teacher; personal Gmail → student.
-  if (!hd) return 'student';
+  if (!hd) return 'teacher';
 
   const localPart = email.split('@')[0].toLowerCase();
-  if (
-    localPart.startsWith('teacher') ||
-    localPart.endsWith('.t') ||
-    localPart.includes('teacher') ||
-    localPart.includes('prof') ||
-    localPart.includes('ucitel')
-  ) {
-    return 'teacher';
-  }
-
-  // Check if it looks like a student ID (digits or short codes)
   if (/^\d+/.test(localPart)) return 'student';
 
-  return 'teacher'; // Workspace accounts default to teacher
+  return 'teacher';
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -66,28 +52,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const googleProfile = profile as { hd?: string; email?: string };
       const email = user.email ?? '';
+      const hd = googleProfile?.hd ?? email.split('@')[1];
 
-      // Determine org from hosted domain
-      if (googleProfile?.hd) {
-        let org = await prisma.organization.findFirst({
-          where: { domain: googleProfile.hd },
+      let org = await prisma.organization.findFirst({
+        where: { domain: hd },
+      });
+
+      if (!org) {
+        org = await prisma.organization.create({
+          data: {
+            name: hd,
+            domain: hd,
+          },
         });
+      }
 
-        if (!org) {
-          org = await prisma.organization.create({
-            data: {
-              name: googleProfile.hd,
-              domain: googleProfile.hd,
-            },
-          });
-        }
+      const role = detectRoleFromEmail(email, hd);
 
-        // Update user role and orgId on every sign-in
-        const role = detectRoleFromEmail(email, googleProfile.hd);
+      try {
         await prisma.user.update({
           where: { email },
           data: { role, orgId: org.id },
         });
+      } catch {
+        // User may not exist yet — adapter will create it
       }
 
       return true;
@@ -104,7 +92,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         user: {
           ...session.user,
           id: user.id,
-          role: dbUser?.role ?? 'student',
+          role: dbUser?.role ?? 'teacher',
           orgId: dbUser?.orgId ?? null,
         },
       };

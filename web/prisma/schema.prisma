@@ -57,7 +57,8 @@ model User {
   email         String    @unique
   name          String?
   image         String?
-  role          Role      @default(student)
+  emailVerified DateTime?
+  role          Role      @default(teacher)
   orgId         String?
   createdAt     DateTime  @default(now())
 
@@ -130,11 +131,11 @@ model Device {
 }
 
 model Classroom {
-  id           String  @id @default(cuid())
-  name         String
-  orgId        String
-  teacherId    String
-  orgUnitPath  String?
+  id          String  @id @default(cuid())
+  name        String
+  orgId       String
+  teacherId   String
+  orgUnitPath String?
 
   org      Organization       @relation(fields: [orgId], references: [id])
   teacher  User               @relation("TeacherClassrooms", fields: [teacherId], references: [id])
@@ -153,13 +154,13 @@ model ClassroomSession {
   endedAt       DateTime?
   activeSceneId String?
 
-  classroom  Classroom        @relation(fields: [classroomId], references: [id])
-  teacher    User             @relation("TeacherSessions", fields: [teacherId], references: [id])
-  activeScene Scene?          @relation(fields: [activeSceneId], references: [id])
-  events     SessionEvent[]
-  messages   ChatMessage[]
-  history    BrowsingHistory[]
-  overrides  TeacherOverride[]
+  classroom   Classroom         @relation(fields: [classroomId], references: [id])
+  teacher     User              @relation("TeacherSessions", fields: [teacherId], references: [id])
+  activeScene Scene?            @relation(fields: [activeSceneId], references: [id])
+  events      SessionEvent[]
+  messages    ChatMessage[]
+  history     BrowsingHistory[]
+  overrides   TeacherOverride[]
 
   @@index([classroomId])
   @@index([teacherId])
@@ -214,8 +215,9 @@ model GroupMember {
   deviceId  String
   studentId String?
 
-  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  student User?  @relation("StudentGroupMembers", fields: [studentId], references: [id])
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  device  Device  @relation(fields: [deviceId], references: [id])
+  student User?   @relation("StudentGroupMembers", fields: [studentId], references: [id])
 
   @@id([groupId, deviceId])
 }
@@ -280,8 +282,8 @@ model TeacherOverride {
   expiresAt    DateTime?
   revokedAt    DateTime?
 
-  session   ClassroomSession @relation(fields: [sessionId], references: [id])
-  teacher   User             @relation("GrantedOverrides", fields: [grantedBy], references: [id])
+  session ClassroomSession @relation(fields: [sessionId], references: [id])
+  teacher User             @relation("GrantedOverrides", fields: [grantedBy], references: [id])
 
   @@index([sessionId])
   @@index([targetDevice])

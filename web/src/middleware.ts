@@ -1,25 +1,22 @@
-import { auth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-export default auth((req) => {
-  const { pathname } = req.nextUrl;
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
-  // Protect all /dashboard routes
   if (pathname.startsWith('/dashboard')) {
-    if (!req.auth?.user) {
-      const signInUrl = new URL('/', req.url);
-      signInUrl.searchParams.set('callbackUrl', pathname);
-      return NextResponse.redirect(signInUrl);
+    const sessionToken =
+      request.cookies.get('authjs.session-token') ??
+      request.cookies.get('__Secure-authjs.session-token');
+
+    if (!sessionToken) {
+      return NextResponse.redirect(new URL('/', request.url));
     }
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
-  matcher: [
-    '/dashboard/:path*',
-    // Skip Next.js internals and static files
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/dashboard/:path*'],
 };
