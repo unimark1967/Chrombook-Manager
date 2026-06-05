@@ -120,6 +120,7 @@ model Device {
   studentId      String?
   status         String    @default("active")
   lastSeen       DateTime?
+  orgUnitPath    String?
 
   org          Organization  @relation(fields: [orgId], references: [id])
   student      User?         @relation("StudentDevices", fields: [studentId], references: [id])

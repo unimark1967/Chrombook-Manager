@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Service account key - НИКОГА не качвай в GitHub!
+service-account.json
+
+# Prisma
+prisma/migrations/
+
+# Logs
+*.log

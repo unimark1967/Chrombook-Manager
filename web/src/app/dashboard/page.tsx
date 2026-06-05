@@ -1,145 +1,114 @@
+import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
-import { Monitor, Users, BookOpen, Activity } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Monitor, Search, Filter, Plus, Wifi, WifiOff } from 'lucide-react';
 
-async function getDashboardStats(orgId: string) {
-  const [deviceCount, classroomCount, activeSessionCount] = await Promise.all([
-    prisma.device.count({ where: { orgId } }),
-    prisma.classroom.count({ where: { orgId } }),
-    prisma.classroomSession.count({ where: { classroom: { orgId }, endedAt: null } }),
-  ]);
-  return { deviceCount, classroomCount, activeSessionCount };
-}
-
-function DeviceCard({ name, status }: { name: string; status: string }) {
-  const isLocked = status === 'locked';
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3 flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <Monitor className="h-5 w-5 text-gray-400" />
-        <span
-          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-            isLocked
-              ? 'bg-red-100 text-red-700'
-              : 'bg-green-100 text-green-700'
-          }`}
-        >
-          {isLocked ? 'Заключено' : 'Активно'}
-        </span>
-      </div>
-      <p className="text-sm font-medium text-gray-800 truncate">{name}</p>
-    </div>
-  );
-}
-
-const DEMO_DEVICES = [
-  { name: 'CBK-001', status: 'active' },
-  { name: 'CBK-002', status: 'active' },
-  { name: 'CBK-003', status: 'locked' },
-  { name: 'CBK-004', status: 'active' },
-  { name: 'CBK-005', status: 'active' },
-  { name: 'CBK-006', status: 'locked' },
-];
-
-export default async function DashboardPage() {
+export default async function DevicesPage() {
   const session = await auth();
+  if (!session?.user?.orgId) redirect('/');
 
-  if (!session?.user) {
-    redirect('/');
+  const devices = await prisma.device.findMany({
+    where: { orgId: session.user.orgId },
+    include: { student: { select: { name: true, email: true } } },
+    orderBy: { lastSeen: 'desc' },
+  });
+
+  const activeCount = devices.filter(d => d.status === 'active').length;
+
+  function timeAgo(date: Date | null) {
+    if (!date) return 'никога';
+    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diff < 60) return `преди ${diff} сек`;
+    if (diff < 3600) return `преди ${Math.floor(diff / 60)} мин`;
+    if (diff < 86400) return `преди ${Math.floor(diff / 3600)} ч`;
+    return `преди ${Math.floor(diff / 86400)} дни`;
   }
 
-  const orgId = (session.user as { orgId?: string }).orgId;
-
-  const stats = orgId
-    ? await getDashboardStats(orgId)
-    : { deviceCount: 0, classroomCount: 0, activeSessionCount: 0 };
-
-  const statCards = [
-    {
-      title: 'Устройства',
-      value: stats.deviceCount,
-      icon: Monitor,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-    },
-    {
-      title: 'Класни стаи',
-      value: stats.classroomCount,
-      icon: BookOpen,
-      color: 'text-indigo-600',
-      bg: 'bg-indigo-50',
-    },
-    {
-      title: 'Активни сесии',
-      value: stats.activeSessionCount,
-      icon: Activity,
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-    },
-    {
-      title: 'Онлайн ученици',
-      value: 0,
-      icon: Users,
-      color: 'text-purple-600',
-      bg: 'bg-purple-50',
-    },
-  ];
-
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Добре дошли, {session.user.name?.split(' ')[0]}
-        </h1>
-        <p className="text-gray-500 mt-1">Преглед на устройствата и сесиите</p>
+    <div className="p-8">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Устройства</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {activeCount} активни от {devices.length} общо
+          </p>
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+          <Plus className="h-4 w-4" />
+          Добави устройство
+        </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <Card key={card.title}>
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">{card.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-1">
-                      {card.value}
-                    </p>
-                  </div>
-                  <div className={`${card.bg} p-2 rounded-lg`}>
-                    <Icon className={`h-5 w-5 ${card.color}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="mb-6 flex gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Търси по сериен номер или ученик..."
+            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+          <Filter className="h-4 w-4" />
+          Филтър
+        </button>
       </div>
 
-      {/* Device Grid */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold text-gray-900">
-            Устройства в класната стая
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {DEMO_DEVICES.map((device) => (
-              <DeviceCard key={device.name} {...device} />
-            ))}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {devices.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <Monitor className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+            <p className="font-medium">Няма устройства</p>
+            <p className="text-sm mt-1">Добави Chromebook устройства за да започнеш</p>
           </div>
-          {stats.deviceCount === 0 && (
-            <p className="text-center text-sm text-gray-400 py-4">
-              Няма регистрирани устройства. Инсталирайте разширението на устройствата.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Сериен номер</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Ученик</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Статус</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Последно виждане</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {devices.map((device) => (
+                <tr key={device.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                        <Monitor className="h-4 w-4 text-indigo-600" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-900 font-mono">{device.serialNumber}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {device.student ? (
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{device.student.name}</p>
+                        <p className="text-xs text-gray-500">{device.student.email}</p>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">Не е назначен</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      device.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {device.status === 'active' ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                      {device.status === 'active' ? 'Онлайн' : 'Офлайн'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {timeAgo(device.lastSeen)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
